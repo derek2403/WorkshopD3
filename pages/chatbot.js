@@ -16,42 +16,54 @@ export default function Chatbot() {
   }, [messages]);
   
   // Function to handle user sending a message
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (inputText.trim() === '') return;
-    
-    // Add user message
-    const userMessage = { text: inputText, sender: 'user' };
-    setMessages([...messages, userMessage]);
+
+    const newUserMessage = { text: inputText, sender: 'user' };
+    const updatedMessages = [...messages, newUserMessage];
+    setMessages(updatedMessages);
     setInputText('');
     setIsTyping(true);
-    
-    // Simulate bot response after a short delay
-    setTimeout(() => {
-      let botResponse;
-      const lowerText = inputText.toLowerCase();
-      
-      if (lowerText.includes('hello') || lowerText.includes('hi')) {
-        botResponse = { text: 'Hello! How can I help you with D3.js today?', sender: 'bot' };
-      } else if (lowerText.includes('d3') || lowerText.includes('visualization')) {
-        botResponse = { text: 'D3.js is a JavaScript library for producing dynamic, interactive data visualizations. Our workshop covers everything from basic charts to complex interactive dashboards.', sender: 'bot' };
-      } else if (lowerText.includes('course') || lowerText.includes('workshop')) {
-        botResponse = { text: 'Our workshop is designed for all skill levels. We have Basic ($299), Professional ($499), and Enterprise (custom pricing) options. Which would you like to know more about?', sender: 'bot' };
-      } else if (lowerText.includes('price') || lowerText.includes('cost')) {
-        botResponse = { text: 'Our Basic plan starts at $299, Professional at $499, and we have custom Enterprise solutions. Each plan includes different levels of access and resources.', sender: 'bot' };
-      } else if (lowerText.includes('register') || lowerText.includes('sign up')) {
-        botResponse = { text: 'Great! You can sign up by going to our website\'s contact section or clicking the "Get Started" button on our homepage.', sender: 'bot' };
-      } else if (lowerText.includes('thanks') || lowerText.includes('thank you')) {
-        botResponse = { text: 'You\'re welcome! Is there anything else I can help you with?', sender: 'bot' };
-      } else if (lowerText.includes('contact')) {
-        botResponse = { text: 'You can reach our team by signing up for our newsletter on the homepage or by sending an email to support@workshopd3.com', sender: 'bot' };
-      } else {
-        botResponse = { text: 'I\'m not sure I understand. Could you rephrase your question about D3.js or our workshop?', sender: 'bot' };
+
+    // Prepare messages for the API
+    // The API expects roles: 'user', 'assistant', or 'system'
+    // We also need to map our 'text' field to 'content'
+    const apiMessages = updatedMessages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'assistant',
+      content: msg.text
+    }));
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: apiMessages }), // Send the whole history
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API Error:', errorData);
+        // Add an error message to the chat
+        const botErrorMessage = { text: `Error: ${errorData.error || 'Could not connect to the AI assistant.'}` , sender: 'bot' };
+        setMessages(prevMessages => [...prevMessages, botErrorMessage]);
+        setIsTyping(false);
+        return;
       }
-      
+
+      const data = await response.json();
+      const botResponse = { text: data.reply, sender: 'bot' };
       setMessages(prevMessages => [...prevMessages, botResponse]);
+
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      const botErrorMessage = { text: 'Error: Could not reach the AI assistant. Please check your connection or API setup.', sender: 'bot' };
+      setMessages(prevMessages => [...prevMessages, botErrorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   return (
